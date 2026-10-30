@@ -4,6 +4,7 @@
 	import Toggle from '#lib/components/ui/Toggle.svelte';
 	import type { BoardDimension } from '#lib/types/game.js';
 	import { gameStore } from '#lib/stores/gameStore.svelte.js';
+	import { onlineStore } from '#lib/stores/onlineStore.svelte.js';
 	import { createConfigFromPreset, PRESETS } from '#lib/utils/presets.js';
 
 	interface Props {
@@ -22,9 +23,27 @@
 	let enableStackCap = $state<boolean>(gameStore.state.config.variants.stackCap !== undefined);
 	let stackCapValue = $state<number>(gameStore.state.config.variants.stackCap ?? 4);
 
+	const isOnline = $derived(gameStore.gameMode === 'online');
+	const isGuest = $derived(isOnline && onlineStore.selfRole === 2);
+	const isHost = $derived(isOnline && onlineStore.selfRole === 1);
+
+	$effect(() => {
+		if (isOpen) {
+			const currentConfig = gameStore.state.config;
+			selectedSize = currentConfig.size;
+			selectedPresetId =
+				PRESETS.find((p) => p.boardSize === currentConfig.size)?.id ?? PRESETS[0].id;
+			noRevealWin = currentConfig.variants.noRevealWin;
+			noMoving = currentConfig.variants.noMoving;
+			enableStackCap = currentConfig.variants.stackCap !== undefined;
+			stackCapValue = currentConfig.variants.stackCap ?? 4;
+		}
+	});
+
 	const availablePresets = $derived(PRESETS.filter((p) => p.boardSize === selectedSize));
 
 	function handleSizeChange(size: BoardDimension) {
+		if (isGuest) return;
 		selectedSize = size;
 		const matching = PRESETS.find((p) => p.boardSize === size);
 		if (matching) {
@@ -33,6 +52,7 @@
 	}
 
 	function handleStartGame() {
+		if (isGuest) return;
 		const preset = PRESETS.find((p) => p.id === selectedPresetId) ?? availablePresets[0];
 		const config = createConfigFromPreset(preset, {
 			noRevealWin,
@@ -47,6 +67,31 @@
 
 <Modal {isOpen} title="Configure Board & Game Rules" maxWidth="md" {onclose}>
 	<div class="flex flex-col gap-5 py-1">
+		<!-- Online Host / Guest Notification Banner -->
+		{#if isGuest}
+			<div
+				class="flex items-center gap-2.5 rounded-xl border border-teal-800/60 bg-teal-950/40 p-3 text-xs text-teal-200"
+			>
+				<span class="inline-block h-2 w-2 shrink-0 rounded-full bg-teal-400"></span>
+				<span>
+					<strong class="font-bold">Guest Mode:</strong> You are Player 2 in Room
+					<span class="font-mono text-teal-300">{onlineStore.currentRoom}</span>. Board size and
+					rules are configured by the Host (Player 1).
+				</span>
+			</div>
+		{:else if isHost}
+			<div
+				class="flex items-center gap-2.5 rounded-xl border border-amber-800/60 bg-amber-950/40 p-3 text-xs text-amber-200"
+			>
+				<span class="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-400"></span>
+				<span>
+					<strong class="font-bold">Host Mode:</strong> You are Player 1 (Host) in Room
+					<span class="font-mono text-amber-300">{onlineStore.currentRoom}</span>. Changes will
+					automatically update the board and start a new game for both you and Player 2.
+				</span>
+			</div>
+		{/if}
+
 		<!-- 1. Board Dimension Selection -->
 		<div class="flex flex-col gap-2">
 			<span class="text-xs font-bold tracking-wider text-stone-400 uppercase"> Board Size </span>
@@ -54,8 +99,10 @@
 				{#each [3, 4, 5] as size (size)}
 					<button
 						type="button"
+						disabled={isGuest}
 						onclick={() => handleSizeChange(size as BoardDimension)}
-						class="flex cursor-pointer flex-col items-center justify-center rounded-xl border p-3 text-center transition-all
+						class="flex flex-col items-center justify-center rounded-xl border p-3 text-center transition-all
+							{isGuest ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}
 							{selectedSize === size
 							? 'border-amber-500 bg-amber-600/20 text-amber-200 ring-2 ring-amber-500/30'
 							: 'bg-stone-850 border-stone-750 text-stone-300 hover:bg-stone-800'}"
@@ -78,8 +125,12 @@
 				{#each availablePresets as preset (preset.id)}
 					<button
 						type="button"
-						onclick={() => (selectedPresetId = preset.id)}
-						class="flex cursor-pointer flex-col rounded-xl border p-3 text-left transition-all
+						disabled={isGuest}
+						onclick={() => {
+							if (!isGuest) selectedPresetId = preset.id;
+						}}
+						class="flex flex-col rounded-xl border p-3 text-left transition-all
+							{isGuest ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}
 							{selectedPresetId === preset.id
 							? 'border-amber-500/70 bg-amber-600/15 text-stone-100 ring-1 ring-amber-500/40'
 							: 'bg-stone-850 border-stone-750/70 text-stone-300 hover:bg-stone-800'}"
@@ -109,23 +160,32 @@
 
 			<Toggle
 				checked={noRevealWin}
+				disabled={isGuest}
 				label="No-Reveal-Win Variant (§8)"
 				description="Moving a piece that exposes an opponent's winning line is an illegal move."
-				onchange={(v) => (noRevealWin = v)}
+				onchange={(v) => {
+					if (!isGuest) noRevealWin = v;
+				}}
 			/>
 
 			<Toggle
 				checked={noMoving}
+				disabled={isGuest}
 				label="No Moving Variant (§8)"
 				description="Placement only; pieces on the board cannot be moved (pure gobbling)."
-				onchange={(v) => (noMoving = v)}
+				onchange={(v) => {
+					if (!isGuest) noMoving = v;
+				}}
 			/>
 
 			<Toggle
 				checked={enableStackCap}
+				disabled={isGuest}
 				label="Stack Cap Variant (§8)"
 				description="Limits maximum stack depth on any square."
-				onchange={(v) => (enableStackCap = v)}
+				onchange={(v) => {
+					if (!isGuest) enableStackCap = v;
+				}}
 			/>
 
 			{#if enableStackCap}
@@ -137,8 +197,12 @@
 						{#each [3, 4, 5] as cap (cap)}
 							<button
 								type="button"
-								onclick={() => (stackCapValue = cap)}
-								class="cursor-pointer rounded-lg px-2.5 py-1 text-xs font-bold transition-colors
+								disabled={isGuest}
+								onclick={() => {
+									if (!isGuest) stackCapValue = cap;
+								}}
+								class="rounded-lg px-2.5 py-1 text-xs font-bold transition-colors
+									{isGuest ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}
 									{stackCapValue === cap
 									? 'bg-amber-600 text-white'
 									: 'bg-stone-800 text-stone-400 hover:text-stone-200'}"
@@ -153,7 +217,13 @@
 	</div>
 
 	{#snippet footer()}
-		<Button variant="secondary" size="md" onclick={onclose}>Cancel</Button>
-		<Button variant="primary" size="md" onclick={handleStartGame}>Apply & Start New Game</Button>
+		<Button variant="secondary" size="md" onclick={onclose}>
+			{isGuest ? 'Close' : 'Cancel'}
+		</Button>
+		{#if !isGuest}
+			<Button variant="primary" size="md" onclick={handleStartGame}>
+				{isHost ? 'Apply & Sync to Room' : 'Apply & Start New Game'}
+			</Button>
+		{/if}
 	{/snippet}
 </Modal>

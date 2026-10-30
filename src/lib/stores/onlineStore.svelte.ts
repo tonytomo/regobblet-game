@@ -60,11 +60,11 @@ export function createOnlineStore() {
 					})
 					.catch(() => {});
 			}
-		} else if (wireMsg.type === 'game_init') {
+		} else if (wireMsg.type === 'game_init' || wireMsg.type === 'config_change') {
 			isOpponentPresent = true;
 			if (selfRole === 2) {
 				gameStore.setOnlineRole(2);
-				gameStore.startNewGame(wireMsg.config, 'online');
+				gameStore.startNewGame(wireMsg.config, 'online', true);
 			}
 		} else if (wireMsg.type === 'move') {
 			if (wireMsg.player !== selfRole) {
@@ -181,6 +181,24 @@ export function createOnlineStore() {
 				action,
 				player,
 				seq: Date.now()
+			};
+			client
+				.publish({
+					room: currentRoom,
+					channel: 'game',
+					payload: JSON.stringify(msg),
+					reliable: true
+				})
+				.catch(() => {});
+		}
+	});
+
+	// Register config change transmitter on gameStore (host broadcasts setup changes)
+	gameStore.setOnConfigChange((config) => {
+		if (client && currentRoom && selfRole === 1) {
+			const msg: WireMessage = {
+				type: 'config_change',
+				config
 			};
 			client
 				.publish({

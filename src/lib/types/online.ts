@@ -16,8 +16,12 @@ export type WireMessage =
 	| {
 			type: 'game_init';
 			config: BoardConfig;
-			player1Id: string;
-			player2Id: string;
+			player1Id?: string;
+			player2Id?: string;
+	  }
+	| {
+			type: 'config_change';
+			config: BoardConfig;
 	  }
 	| {
 			type: 'move';

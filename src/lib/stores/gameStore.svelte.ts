@@ -33,6 +33,7 @@ export function createGameStore() {
 	let isAiThinking = $state<boolean>(false);
 	let onlineRole = $state<PlayerId | null>(null);
 	let onMoveCallback: ((action: MoveAction, player: PlayerId) => void) | null = null;
+	let onConfigChangeCallback: ((config: BoardConfig) => void) | null = null;
 
 	let inspectedStack = $state<{ row: number; col: number; stack: Piece[] } | null>(null);
 
@@ -204,6 +205,10 @@ export function createGameStore() {
 			onMoveCallback = cb;
 		},
 
+		setOnConfigChange(cb: (config: BoardConfig) => void) {
+			onConfigChangeCallback = cb;
+		},
+
 		setAiDifficulty(diff: AiDifficulty) {
 			aiDifficulty = diff;
 		},
@@ -321,20 +326,29 @@ export function createGameStore() {
 			history = [state];
 			historyIndex = 0;
 			selected = null;
+			inspectedStack = null;
 			if (gameMode === 'ai' && state.activePlayer === aiPlayer) {
 				checkAndTriggerAi().catch(() => {});
 			}
 		},
 
-		startNewGame(config: BoardConfig, mode?: GameMode) {
+		startNewGame(config: BoardConfig, mode?: GameMode, isRemote = false) {
 			if (mode) gameMode = mode;
 			state = createInitialState(config);
 			history = [state];
 			historyIndex = 0;
 			selected = null;
+			inspectedStack = null;
 			if (gameMode === 'ai' && state.activePlayer === aiPlayer) {
 				checkAndTriggerAi().catch(() => {});
 			}
+			if (!isRemote && gameMode === 'online' && onConfigChangeCallback) {
+				onConfigChangeCallback(config);
+			}
+		},
+
+		applyRemoteConfig(config: BoardConfig) {
+			this.startNewGame(config, 'online', true);
 		},
 
 		applyRemoteMove(action: MoveAction) {
