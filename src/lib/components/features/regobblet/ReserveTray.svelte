@@ -13,7 +13,15 @@
 	const state = $derived(gameStore.state);
 	const reserve = $derived(state.reserves[owner]);
 	const selected = $derived(gameStore.selected);
-	const isActiveTurn = $derived(state.activePlayer === owner && state.status.state === 'playing');
+	const isOwnerTurn = $derived(state.activePlayer === owner && state.status.state === 'playing');
+	const canInteract = $derived(
+		isOwnerTurn &&
+			!gameStore.isAiThinking &&
+			(gameStore.gameMode !== 'online' ||
+				gameStore.onlineRole === null ||
+				gameStore.onlineRole === owner) &&
+			(gameStore.gameMode !== 'ai' || gameStore.aiPlayer !== owner)
+	);
 
 	const maxRank = $derived.by(() => {
 		let highest = 6;
@@ -38,11 +46,12 @@
 	});
 
 	function handlePieceClick(piece: Piece) {
+		if (!canInteract) return;
 		gameStore.selectReservePiece(piece);
 	}
 
 	function handleDragStart(e: DragEvent, piece: Piece) {
-		if (piece.owner !== state.activePlayer) return;
+		if (!canInteract || piece.owner !== state.activePlayer) return;
 		if (e.dataTransfer) {
 			e.dataTransfer.effectAllowed = 'move';
 			e.dataTransfer.setData('text/plain', `reserve:${piece.id}`);
@@ -53,7 +62,7 @@
 
 <div
 	class="mx-auto w-full max-w-[500px] rounded-2xl p-2 transition-all duration-200 select-none sm:p-2.5
-		{isActiveTurn
+		{isOwnerTurn
 		? owner === 1
 			? 'border-2 border-amber-500/50 bg-amber-950/25 shadow-md shadow-amber-950/20'
 			: 'border-2 border-teal-500/50 bg-teal-950/25 shadow-md shadow-teal-950/20'
@@ -63,14 +72,14 @@
 	<div class="mb-1.5 flex items-center justify-between px-2 text-xs">
 		<div class="flex items-center gap-2">
 			<span
-				class="h-2.5 w-2.5 rounded-full {owner === 1 ? 'bg-amber-500' : 'bg-teal-400'} {isActiveTurn
+				class="h-2.5 w-2.5 rounded-full {owner === 1 ? 'bg-amber-500' : 'bg-teal-400'} {isOwnerTurn
 					? 'animate-ping'
 					: ''}"
 			></span>
 			<span class="font-bold tracking-tight {owner === 1 ? 'text-amber-400' : 'text-teal-400'}">
 				{label || `Player ${owner}`}
 			</span>
-			{#if isActiveTurn}
+			{#if isOwnerTurn}
 				<span
 					class="py-0.2 rounded border border-stone-700/60 bg-stone-800 px-1.5 text-[10px] font-semibold tracking-wider text-stone-300 uppercase"
 				>
@@ -101,7 +110,7 @@
 					<button
 						type="button"
 						onclick={() => handlePieceClick(representativePiece)}
-						disabled={!isActiveTurn}
+						disabled={!canInteract}
 						class="h-full w-full cursor-pointer rounded-full p-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
 						aria-label="Select rank {group.rank} piece ({group.count} remaining)"
 					>
@@ -109,7 +118,7 @@
 							piece={representativePiece}
 							{maxRank}
 							isSelected={isGroupSelected}
-							isInteractive={isActiveTurn}
+							isInteractive={canInteract}
 							ondragstart={(e) => handleDragStart(e, representativePiece)}
 						/>
 					</button>

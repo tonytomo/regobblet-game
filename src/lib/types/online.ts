@@ -10,6 +10,10 @@ export interface RoomMetadata {
 
 export type WireMessage =
 	| {
+			type: 'guest_ready';
+			sender: string;
+	  }
+	| {
 			type: 'game_init';
 			config: BoardConfig;
 			player1Id: string;

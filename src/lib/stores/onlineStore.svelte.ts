@@ -41,9 +41,29 @@ export function createOnlineStore() {
 			return;
 		}
 
-		if (wireMsg.type === 'game_init') {
-			// If we are guest, role is 2; if host, role is 1
+		if (wireMsg.type === 'guest_ready') {
+			isOpponentPresent = true;
+			// If Host, broadcast game_init so Guest gets the board config and starts
+			if (selfRole === 1 && client && currentRoom) {
+				const initMsg: WireMessage = {
+					type: 'game_init',
+					config: gameStore.state.config,
+					player1Id: client.selfLabel,
+					player2Id: wireMsg.sender
+				};
+				client
+					.publish({
+						room: currentRoom,
+						channel: 'game',
+						payload: JSON.stringify(initMsg),
+						reliable: true
+					})
+					.catch(() => {});
+			}
+		} else if (wireMsg.type === 'game_init') {
+			isOpponentPresent = true;
 			if (selfRole === 2) {
+				gameStore.setOnlineRole(2);
 				gameStore.startNewGame(wireMsg.config, 'online');
 			}
 		} else if (wireMsg.type === 'move') {
@@ -108,6 +128,23 @@ export function createOnlineStore() {
 			newClient.on('presenceJoin', (ev) => {
 				if (ev.room === currentRoom && ev.who !== newClient?.selfLabel) {
 					isOpponentPresent = true;
+					// If Host, broadcast game_init so Guest receives board setup
+					if (selfRole === 1 && currentRoom) {
+						const initMsg: WireMessage = {
+							type: 'game_init',
+							config: gameStore.state.config,
+							player1Id: newClient.selfLabel,
+							player2Id: ev.who
+						};
+						newClient
+							.publish({
+								room: currentRoom,
+								channel: 'game',
+								payload: JSON.stringify(initMsg),
+								reliable: true
+							})
+							.catch(() => {});
+					}
 				}
 			});
 
@@ -135,6 +172,26 @@ export function createOnlineStore() {
 			throw err;
 		}
 	}
+
+	// Register move transmitter on gameStore
+	gameStore.setOnMove((action, player) => {
+		if (client && currentRoom && selfRole === player) {
+			const msg: WireMessage = {
+				type: 'move',
+				action,
+				player,
+				seq: Date.now()
+			};
+			client
+				.publish({
+					room: currentRoom,
+					channel: 'game',
+					payload: JSON.stringify(msg),
+					reliable: true
+				})
+				.catch(() => {});
+		}
+	});
 
 	return {
 		get isConnected() {
@@ -188,6 +245,7 @@ export function createOnlineStore() {
 			selfRole = 1;
 			isOpponentPresent = false;
 
+			gameStore.setOnlineRole(1);
 			gameStore.startNewGame(config, 'online');
 			return code;
 		},
@@ -201,11 +259,18 @@ export function createOnlineStore() {
 			selfRole = 2;
 			isOpponentPresent = true;
 
-			// Request game init state from host
+			gameStore.setOnlineRole(2);
+			gameStore.setGameMode('online');
+
+			// Send guest_ready to host
+			const readyMsg: WireMessage = {
+				type: 'guest_ready',
+				sender: cli.selfLabel
+			};
 			await cli.publish({
 				room: code,
 				channel: 'game',
-				payload: JSON.stringify({ type: 'guest_ready', sender: cli.selfLabel }),
+				payload: JSON.stringify(readyMsg),
 				reliable: true
 			});
 		},
@@ -252,6 +317,8 @@ export function createOnlineStore() {
 			currentRoom = null;
 			selfRole = null;
 			isOpponentPresent = false;
+			gameStore.setOnlineRole(null);
+			gameStore.setGameMode('ai');
 		}
 	};
 }

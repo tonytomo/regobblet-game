@@ -11,6 +11,7 @@
 	import StackInspectModal from '#lib/components/features/regobblet/StackInspectModal.svelte';
 	import GameOverModal from '#lib/components/features/regobblet/GameOverModal.svelte';
 	import { gameStore } from '#lib/stores/gameStore.svelte.js';
+	import { onlineStore } from '#lib/stores/onlineStore.svelte.js';
 
 	let isSetupOpen = $state<boolean>(false);
 	let isRulesOpen = $state<boolean>(false);
@@ -18,6 +19,23 @@
 
 	const gameMode = $derived(gameStore.gameMode);
 	const aiDifficulty = $derived(gameStore.aiDifficulty);
+
+	const player2Label = $derived.by(() => {
+		if (gameMode === 'online') {
+			return onlineStore.selfRole === 2 ? 'You (Player 2)' : 'Opponent (Player 2)';
+		}
+		if (gameMode === 'ai') {
+			return `AI Opponent (${aiDifficulty})`;
+		}
+		return 'Player 2';
+	});
+
+	const player1Label = $derived.by(() => {
+		if (gameMode === 'online') {
+			return onlineStore.selfRole === 1 ? 'You (Player 1)' : 'Opponent (Player 1)';
+		}
+		return 'Player 1';
+	});
 </script>
 
 <svelte:head>
@@ -37,16 +55,13 @@
 <Shell>
 	<div class="my-auto flex w-full flex-col items-center gap-3 sm:gap-4">
 		<!-- Player 2 Reserve (Top) -->
-		<ReserveTray
-			owner={2}
-			label={gameMode === 'ai' ? `AI Opponent (${aiDifficulty})` : 'Player 2'}
-		/>
+		<ReserveTray owner={2} label={player2Label} />
 
 		<!-- Game Board (Center) -->
 		<GameBoard oninspect={(r, c) => gameStore.inspectSquare(r, c)} />
 
 		<!-- Player 1 Reserve (Bottom) -->
-		<ReserveTray owner={1} label="Player 1" />
+		<ReserveTray owner={1} label={player1Label} />
 
 		<!-- Game Controls & Status Banner -->
 		<GameControls onopenOnline={() => (isOnlineOpen = true)} />

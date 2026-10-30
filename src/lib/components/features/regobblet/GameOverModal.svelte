@@ -2,6 +2,7 @@
 	import Modal from '#lib/components/ui/Modal.svelte';
 	import Button from '#lib/components/ui/Button.svelte';
 	import { gameStore } from '#lib/stores/gameStore.svelte.js';
+	import { onlineStore } from '#lib/stores/onlineStore.svelte.js';
 
 	interface Props {
 		onopenSetup?: () => void;
@@ -24,7 +25,11 @@
 	});
 
 	function handleRematch() {
-		gameStore.resetCurrentGame();
+		if (gameStore.gameMode === 'online') {
+			onlineStore.sendRestart().catch(() => {});
+		} else {
+			gameStore.resetCurrentGame();
+		}
 		isDismissed = false;
 	}
 

@@ -31,6 +31,8 @@ export function createGameStore() {
 	let aiDifficulty = $state<AiDifficulty>('medium');
 	let aiPlayer = $state<PlayerId>(2);
 	let isAiThinking = $state<boolean>(false);
+	let onlineRole = $state<PlayerId | null>(null);
+	let onMoveCallback: ((action: MoveAction, player: PlayerId) => void) | null = null;
 
 	let inspectedStack = $state<{ row: number; col: number; stack: Piece[] } | null>(null);
 
@@ -115,8 +117,9 @@ export function createGameStore() {
 		}
 	}
 
-	function executeMove(action: MoveAction): boolean {
+	function executeMove(action: MoveAction, isRemote = false): boolean {
 		const prevBoard = state.board;
+		const playerWhoMoved = state.activePlayer;
 		const result = applyMove(state, action);
 		if (result.error) {
 			sounds.playInvalid();
@@ -132,6 +135,11 @@ export function createGameStore() {
 		historyIndex = history.length - 1;
 
 		selected = null;
+
+		// Broadcast move over WebSocket in online mode
+		if (!isRemote && gameMode === 'online' && onMoveCallback) {
+			onMoveCallback(action, playerWhoMoved);
+		}
 
 		if (state.status.state === 'won') {
 			sounds.playWin();
@@ -170,6 +178,9 @@ export function createGameStore() {
 		get isAiThinking() {
 			return isAiThinking;
 		},
+		get onlineRole() {
+			return onlineRole;
+		},
 		get inspectedStack() {
 			return inspectedStack;
 		},
@@ -183,6 +194,14 @@ export function createGameStore() {
 		setGameMode(mode: GameMode) {
 			gameMode = mode;
 			selected = null;
+		},
+
+		setOnlineRole(role: PlayerId | null) {
+			onlineRole = role;
+		},
+
+		setOnMove(cb: (action: MoveAction, player: PlayerId) => void) {
+			onMoveCallback = cb;
 		},
 
 		setAiDifficulty(diff: AiDifficulty) {
@@ -199,6 +218,7 @@ export function createGameStore() {
 		selectReservePiece(piece: Piece) {
 			if (state.status.state !== 'playing' || isAiThinking) return;
 			if (gameMode === 'ai' && state.activePlayer === aiPlayer) return;
+			if (gameMode === 'online' && onlineRole !== null && state.activePlayer !== onlineRole) return;
 			if (piece.owner !== state.activePlayer) {
 				sounds.playInvalid();
 				return;
@@ -218,6 +238,7 @@ export function createGameStore() {
 		handleSquareClick(row: number, col: number) {
 			if (state.status.state !== 'playing' || isAiThinking) return;
 			if (gameMode === 'ai' && state.activePlayer === aiPlayer) return;
+			if (gameMode === 'online' && onlineRole !== null && state.activePlayer !== onlineRole) return;
 
 			const square = state.board[row][col];
 			const top = getTopPiece(square);
@@ -317,7 +338,7 @@ export function createGameStore() {
 		},
 
 		applyRemoteMove(action: MoveAction) {
-			return executeMove(action);
+			return executeMove(action, true);
 		}
 	};
 }

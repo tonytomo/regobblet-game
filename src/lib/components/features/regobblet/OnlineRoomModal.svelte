@@ -62,6 +62,7 @@
 			onlineStore.setApiKey(apiKeyInput.trim());
 			settingsStore.setApiKey(apiKeyInput.trim());
 			await onlineStore.joinRoom(roomCodeInput.trim().toLowerCase(), apiKeyInput.trim());
+			onclose?.();
 		} catch {
 			// error is set in store
 		} finally {
@@ -247,7 +248,10 @@
 				</div>
 
 				<div class="mt-2 flex w-full items-center gap-2">
-					<Button variant="danger" size="sm" class="w-full" onclick={handleLeaveRoom}>
+					<Button variant="accent" size="sm" class="flex-1" onclick={onclose}>
+						Enter Game Board
+					</Button>
+					<Button variant="danger" size="sm" class="flex-1" onclick={handleLeaveRoom}>
 						Leave Room
 					</Button>
 				</div>

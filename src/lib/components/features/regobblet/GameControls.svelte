@@ -2,6 +2,7 @@
 	import Button from '#lib/components/ui/Button.svelte';
 	import Badge from '#lib/components/ui/Badge.svelte';
 	import { gameStore, type GameMode } from '#lib/stores/gameStore.svelte.js';
+	import { onlineStore } from '#lib/stores/onlineStore.svelte.js';
 	import type { AiDifficulty } from '#lib/utils/aiBot.js';
 
 	interface Props {
@@ -17,6 +18,7 @@
 	const isAiThinking = $derived(gameStore.isAiThinking);
 	const canUndo = $derived(gameStore.canUndo);
 	const canRedo = $derived(gameStore.canRedo);
+	const onlineRole = $derived(gameStore.onlineRole);
 
 	const isBotTurn = $derived(
 		gameMode === 'ai' && active === gameStore.aiPlayer && state.status.state === 'playing'
@@ -24,14 +26,29 @@
 
 	function handleModeChange(mode: GameMode) {
 		if (mode === 'online') {
-			onopenOnline?.();
+			if (!onlineStore.currentRoom) {
+				onopenOnline?.();
+			} else {
+				gameStore.setGameMode('online');
+			}
 		} else {
+			if (gameStore.gameMode === 'online' && onlineStore.currentRoom) {
+				onlineStore.leaveRoom().catch(() => {});
+			}
 			gameStore.setGameMode(mode);
 		}
 	}
 
 	function handleDifficultyChange(diff: AiDifficulty) {
 		gameStore.setAiDifficulty(diff);
+	}
+
+	function handleRestart() {
+		if (gameMode === 'online') {
+			onlineStore.sendRestart().catch(() => {});
+		} else {
+			gameStore.resetCurrentGame();
+		}
 	}
 </script>
 
@@ -42,7 +59,23 @@
 	>
 		<div class="flex items-center gap-2">
 			{#if state.status.state === 'playing'}
-				{#if isBotTurn}
+				{#if gameMode === 'online' && onlineRole !== null}
+					{#if active === onlineRole}
+						<Badge variant={active === 1 ? 'player1' : 'player2'} size="md">
+							<span
+								class="inline-block h-2 w-2 rounded-full {active === 1
+									? 'bg-amber-400'
+									: 'bg-teal-400'}"
+							></span>
+							Your Turn (Player {active})
+						</Badge>
+					{:else}
+						<Badge variant="neutral" size="md">
+							<span class="inline-block h-2 w-2 animate-pulse rounded-full bg-stone-400"></span>
+							Opponent's Turn (Player {active})...
+						</Badge>
+					{/if}
+				{:else if isBotTurn}
 					<Badge variant="player2" size="md">
 						<span class="inline-block h-2 w-2 animate-ping rounded-full bg-teal-400"></span>
 						AI thinking ({aiDifficulty})...
@@ -77,6 +110,43 @@
 			<span>{state.config.moveLimit}</span>
 		</div>
 	</div>
+
+	<!-- Online Room Status Banner (when in online mode) -->
+	{#if gameMode === 'online' && onlineStore.currentRoom}
+		<div
+			class="flex items-center justify-between rounded-xl border border-teal-800/60 bg-teal-950/40 px-3 py-1.5 text-xs shadow-xs"
+		>
+			<div class="flex items-center gap-2">
+				<span
+					class="h-2 w-2 rounded-full {onlineStore.isOpponentPresent
+						? 'bg-emerald-400'
+						: 'animate-ping bg-amber-400'}"
+				></span>
+				<span class="font-mono text-stone-300">
+					Room: <strong class="text-teal-300">{onlineStore.currentRoom}</strong>
+				</span>
+				<span class="text-[10px] text-stone-400">
+					({onlineStore.selfRole === 1 ? 'Host' : 'Guest'})
+				</span>
+			</div>
+			<div class="flex items-center gap-1.5">
+				<button
+					type="button"
+					onclick={onopenOnline}
+					class="hover:bg-stone-750 cursor-pointer rounded-lg bg-stone-800 px-2 py-0.5 text-[11px] text-stone-300 transition-colors"
+				>
+					Room Info
+				</button>
+				<button
+					type="button"
+					onclick={() => onlineStore.leaveRoom()}
+					class="cursor-pointer rounded-lg border border-rose-800/60 bg-rose-950/80 px-2 py-0.5 text-[11px] text-rose-300 transition-colors hover:bg-rose-900"
+				>
+					Leave
+				</button>
+			</div>
+		</div>
+	{/if}
 
 	<!-- Mode Selector Tabs & AI Difficulty -->
 	<div class="flex flex-wrap items-center justify-between gap-2">
@@ -191,7 +261,7 @@
 			variant="secondary"
 			size="sm"
 			disabled={isAiThinking}
-			onclick={() => gameStore.resetCurrentGame()}
+			onclick={handleRestart}
 			title="Restart Current Board"
 		>
 			<svg

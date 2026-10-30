@@ -38,7 +38,28 @@
 		selected?.source === 'board' && selected.fromRow === row && selected.fromCol === col
 	);
 
+	const canInteractWithPiece = $derived(
+		topPiece !== null &&
+			topPiece.owner === gameStore.state.activePlayer &&
+			gameStore.state.status.state === 'playing' &&
+			!gameStore.state.config.variants.noMoving &&
+			(gameStore.gameMode !== 'online' ||
+				gameStore.onlineRole === null ||
+				gameStore.onlineRole === topPiece.owner) &&
+			(gameStore.gameMode !== 'ai' || gameStore.aiPlayer !== topPiece.owner)
+	);
+
 	function handleClick() {
+		if (
+			gameStore.gameMode === 'online' &&
+			gameStore.onlineRole !== null &&
+			gameStore.state.activePlayer !== gameStore.onlineRole
+		) {
+			return;
+		}
+		if (gameStore.gameMode === 'ai' && gameStore.state.activePlayer === gameStore.aiPlayer) {
+			return;
+		}
 		gameStore.handleSquareClick(row, col);
 	}
 
@@ -58,14 +79,18 @@
 	function handleDrop(e: DragEvent) {
 		e.preventDefault();
 		isDragOver = false;
-		if (isValidTarget) {
+		if (
+			isValidTarget &&
+			(gameStore.gameMode !== 'online' ||
+				gameStore.onlineRole === null ||
+				gameStore.state.activePlayer === gameStore.onlineRole)
+		) {
 			gameStore.handleSquareClick(row, col);
 		}
 	}
 
 	function handleDragStart(e: DragEvent) {
-		if (!topPiece || topPiece.owner !== gameStore.state.activePlayer) return;
-		if (gameStore.state.config.variants.noMoving) return;
+		if (!canInteractWithPiece) return;
 		if (e.dataTransfer) {
 			e.dataTransfer.effectAllowed = 'move';
 			e.dataTransfer.setData('text/plain', `board:${row}:${col}`);
@@ -114,8 +139,7 @@
 				piece={topPiece}
 				{maxRank}
 				isSelected={isSquareSelected}
-				isInteractive={topPiece.owner === gameStore.state.activePlayer &&
-					!gameStore.state.config.variants.noMoving}
+				isInteractive={canInteractWithPiece}
 				ondragstart={handleDragStart}
 			/>
 		</div>
