@@ -1,1 +1,9 @@
-// place files you want to import through the `#lib` alias in this folder.
+export * from './types/game.js';
+export * from './types/online.js';
+export * from './utils/gameRules.js';
+export * from './utils/presets.js';
+export * from './utils/aiBot.js';
+export * from './utils/sound.js';
+export * from './stores/gameStore.svelte.js';
+export * from './stores/settingsStore.svelte.js';
+export * from './stores/onlineStore.svelte.js';
