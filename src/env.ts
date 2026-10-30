@@ -7,4 +7,3 @@ export const variables = defineEnvVars({
 		description: 'Universal WebSocket Server URL for online multiplayer'
 	}
 });
-

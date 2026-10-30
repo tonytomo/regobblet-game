@@ -48,4 +48,3 @@ export interface OnlineConnectionState {
 	serverUrl: string;
 	error?: string;
 }
-

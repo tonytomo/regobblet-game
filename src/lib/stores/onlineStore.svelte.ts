@@ -3,9 +3,13 @@ import { variables } from '../../env.js';
 import type { BoardConfig, MoveAction, PlayerId } from '#lib/types/game.js';
 import type { WireMessage } from '#lib/types/online.js';
 import { gameStore } from './gameStore.svelte.js';
+import { settingsStore } from './settingsStore.svelte.js';
 
 export function createOnlineStore() {
 	let client: Client | null = null;
+	let lastConnectedUrl: string | null = null;
+	let lastConnectedKey: string | null = null;
+
 	let isConnected = $state<boolean>(false);
 	let isConnecting = $state<boolean>(false);
 	let currentRoom = $state<string | null>(null);
@@ -13,6 +17,7 @@ export function createOnlineStore() {
 	let isOpponentPresent = $state<boolean>(false);
 	let error = $state<string | null>(null);
 	let serverUrl = $state<string>('ws://localhost:18080/ws');
+	let apiKey = $state<string>(settingsStore.apiKey || '');
 
 	// Attempt to initialize from env
 	try {
@@ -50,58 +55,79 @@ export function createOnlineStore() {
 		}
 	}
 
-	async function ensureConnected(targetUrl?: string): Promise<Client> {
+	async function ensureConnected(targetUrl?: string, targetKey?: string): Promise<Client> {
 		const url = targetUrl || serverUrl;
-		if (client && isConnected) {
+		const key = targetKey || apiKey;
+
+		if (!key.trim()) {
+			const errMsg = 'API key is required to connect to the online server';
+			error = errMsg;
+			throw new Error(errMsg);
+		}
+
+		if (client && isConnected && lastConnectedUrl === url && lastConnectedKey === key) {
 			return client;
+		}
+
+		// If reconnecting with different URL or API key, close existing connection
+		if (client) {
+			try {
+				await client.close();
+			} catch {
+				// ignore
+			}
+			client = null;
 		}
 
 		isConnecting = true;
 		error = null;
 
 		try {
-			client = new Client({
+			const newClient = new Client({
 				url,
-				apiKey: 'regobblet-client-key',
+				apiKey: key.trim(),
 				heartbeat: { intervalMs: 25000, timeoutMs: 10000 },
 				reconnect: { baseDelayMs: 500, maxDelayMs: 10000 },
 				authFailureMode: 'never-fatal'
 			});
 
-			client.on('connected', () => {
+			newClient.on('connected', () => {
 				isConnected = true;
 				isConnecting = false;
 				error = null;
 			});
 
-			client.on('disconnected', () => {
+			newClient.on('disconnected', () => {
 				isConnected = false;
 			});
 
-			client.on('message', (frame) => {
+			newClient.on('message', (frame) => {
 				handleInboundMessage(frame);
 			});
 
-			client.on('presenceJoin', (ev) => {
-				if (ev.room === currentRoom && ev.who !== client?.selfLabel) {
+			newClient.on('presenceJoin', (ev) => {
+				if (ev.room === currentRoom && ev.who !== newClient?.selfLabel) {
 					isOpponentPresent = true;
 				}
 			});
 
-			client.on('presenceLeave', (ev) => {
-				if (ev.room === currentRoom && ev.who !== client?.selfLabel) {
+			newClient.on('presenceLeave', (ev) => {
+				if (ev.room === currentRoom && ev.who !== newClient?.selfLabel) {
 					isOpponentPresent = false;
 				}
 			});
 
-			client.on('error', (err) => {
+			newClient.on('error', (err) => {
 				error = err.error?.message || 'Connection error';
 			});
 
-			await client.connect();
+			await newClient.connect();
+			client = newClient;
+			lastConnectedUrl = url;
+			lastConnectedKey = key;
 			isConnected = true;
 			isConnecting = false;
-			return client;
+			return newClient;
 		} catch (err: unknown) {
 			isConnecting = false;
 			isConnected = false;
@@ -132,13 +158,21 @@ export function createOnlineStore() {
 		get serverUrl() {
 			return serverUrl;
 		},
+		get apiKey() {
+			return apiKey;
+		},
 
 		setServerUrl(url: string) {
 			serverUrl = url;
 		},
 
-		async createRoom(config: BoardConfig): Promise<string> {
-			const cli = await ensureConnected();
+		setApiKey(key: string) {
+			apiKey = key;
+		},
+
+		async createRoom(config: BoardConfig, key?: string): Promise<string> {
+			if (key) apiKey = key;
+			const cli = await ensureConnected(serverUrl, apiKey);
 			const code = 'rg-' + Math.random().toString(36).substring(2, 8);
 
 			await cli.createRoom({
@@ -158,8 +192,9 @@ export function createOnlineStore() {
 			return code;
 		},
 
-		async joinRoom(code: string): Promise<void> {
-			const cli = await ensureConnected();
+		async joinRoom(code: string, key?: string): Promise<void> {
+			if (key) apiKey = key;
+			const cli = await ensureConnected(serverUrl, apiKey);
 			await cli.joinRoom({ room: code });
 
 			currentRoom = code;

@@ -94,4 +94,3 @@ export interface GameState {
 	positionHistory: Map<string, number>; // state key -> count for threefold repetition
 	lastMove?: MoveAction;
 }
-

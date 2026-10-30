@@ -8,6 +8,7 @@ interface SettingsState {
 	theme: PieceTheme;
 	stackIndicator: StackIndicatorStyle;
 	serverUrl: string;
+	apiKey: string;
 }
 
 const STORAGE_KEY = 'regobblet_settings';
@@ -17,7 +18,8 @@ function loadInitialSettings(): SettingsState {
 		isSoundEnabled: true,
 		theme: 'matryoshka',
 		stackIndicator: 'both',
-		serverUrl: 'ws://localhost:18080/ws'
+		serverUrl: 'ws://localhost:18080/ws',
+		apiKey: ''
 	};
 
 	if (typeof window === 'undefined') {
@@ -43,6 +45,7 @@ export function createSettingsStore() {
 	let theme = $state<PieceTheme>(initial.theme);
 	let stackIndicator = $state<StackIndicatorStyle>(initial.stackIndicator);
 	let serverUrl = $state<string>(initial.serverUrl);
+	let apiKey = $state<string>(initial.apiKey);
 
 	// Sync initial sound state
 	sounds.setEnabled(initial.isSoundEnabled);
@@ -56,7 +59,8 @@ export function createSettingsStore() {
 					isSoundEnabled,
 					theme,
 					stackIndicator,
-					serverUrl
+					serverUrl,
+					apiKey
 				})
 			);
 		} catch {
@@ -76,6 +80,9 @@ export function createSettingsStore() {
 		},
 		get serverUrl() {
 			return serverUrl;
+		},
+		get apiKey() {
+			return apiKey;
 		},
 		setSoundEnabled(val: boolean) {
 			isSoundEnabled = val;
@@ -97,6 +104,10 @@ export function createSettingsStore() {
 		},
 		setServerUrl(val: string) {
 			serverUrl = val;
+			persist();
+		},
+		setApiKey(val: string) {
+			apiKey = val;
 			persist();
 		}
 	};
